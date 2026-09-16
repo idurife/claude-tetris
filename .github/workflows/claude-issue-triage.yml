@@ -101,7 +101,11 @@ jobs:
             ARCHIVO 2 — `.triage/diagnostico.md`
 
             El diagnóstico, ESCRITO EN ESPAÑOL (el proyecto y su interfaz están en
-            español), con exactamente esta estructura:
+            español) y en Markdown de GitHub (GFM), porque el archivo se publica tal
+            cual como comentario del issue y GitHub lo tiene que renderizar bien:
+            encabezados con `##` y `###`, **negritas**, listas con `-`, y nombres de
+            archivos y funciones entre backticks. Nada de HTML, ni envolver todo el
+            texto en un bloque de código. Estructura exacta:
 
             ## Diagnóstico automático
 
@@ -133,6 +137,9 @@ jobs:
             Tu nivel de confianza y qué información falta para estar seguro.
 
             REGLAS FINALES:
+            - Comprueba que el Markdown sea válido para GitHub antes de guardarlo:
+              línea en blanco antes y después de cada lista, tabla o bloque de código,
+              y todo bloque ``` abierto tiene que quedar cerrado.
             - No escribas nunca "@claude" en el diagnóstico: dispararía otro workflow.
             - Sé concreto y breve. Nada de relleno ni de repetir el issue entero.
             - Si el issue se entiende pero no hay nada que arreglar en el código,
