@@ -151,6 +151,7 @@ function spawn() {
   next = randomPiece();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
+    return;
   }
   drawNext();
 }
@@ -199,6 +200,8 @@ function draw() {
     for (let c = 0; c < COLS; c++)
       drawBlock(ctx, c, r, board[r][c], BLOCK);
 
+  if (gameOver) return;
+
   // ghost
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
@@ -226,6 +229,8 @@ function drawNext() {
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
+  animId = null;
+  draw();
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -266,6 +271,13 @@ function loop(ts) {
     }
   }
   draw();
+  // spawn() puede haber terminado la partida dentro de lockPiece(): en ese caso
+  // cancelAnimationFrame() no sirve (el frame actual ya se está ejecutando),
+  // así que hay que cortar aquí para no encadenar otro frame.
+  if (gameOver || paused) {
+    animId = null;
+    return;
+  }
   animId = requestAnimationFrame(loop);
 }
 

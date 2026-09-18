@@ -48,6 +48,8 @@ Pause/resume works by `cancelAnimationFrame` and then calling `loop(performance.
 
 `rotateCW` is transpose + row-reverse on the square matrix (no SRS, no rotation state tracked). `tryRotate` retries the rotated shape at x-offsets `[0, -1, 1, -2, 2]` — horizontal kicks only, no floor kicks.
 
-### Known quirk
+### Stopping the loop on game over
 
-`spawn()` calls `endGame()` (which does `cancelAnimationFrame(animId)`) while still inside `loop()`; `loop()` then schedules another frame on its way out. After a game over triggered by *gravity* the loop keeps running behind the overlay — input is blocked by the `gameOver` flag, but pieces keep falling. A game over triggered by hard drop cancels correctly. Worth fixing if you touch lock/spawn/loop; be aware the behavior differs by path.
+`spawn()` calls `endGame()` while still inside `loop()` (via `lockPiece()`), so `endGame()`'s `cancelAnimationFrame(animId)` cannot stop the frame that is already executing — `animId` refers to it. That is why `loop()` checks `gameOver || paused` *after* `draw()` and returns instead of scheduling the next frame; without that check the loop kept running behind the overlay and pieces kept stacking. `cancelAnimationFrame` in `endGame()` still matters for the hard-drop path, where the game ends from a keydown handler and there is a genuinely pending frame.
+
+Consequences to preserve if you touch lock/spawn/loop: `spawn()` returns right after `endGame()`, `draw()` skips ghost + current piece once `gameOver` is set (the piece that did not fit is never painted over the stack), and `endGame()` repaints once so the final board is correct on both paths.
