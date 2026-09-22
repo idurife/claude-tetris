@@ -29,7 +29,16 @@ No classes, no closures, no state container. Any new feature is another top-leve
 
 ### The color index is the piece type
 
-`PIECES[1..7]` are matrices filled with their own type number, and that same number indexes `COLORS` and is what gets written into `board` cells (`0` = empty). So a cell value is simultaneously "occupied", "which piece", and "which color". Reordering `COLORS` silently recolors pieces; a piece matrix must be filled with its own index or rendering breaks.
+`PIECES[1..8]` are matrices whose non-zero cells hold their own type number, and that same number indexes `COLORS` and is what gets written into `board` cells (`0` = empty). So a cell value is simultaneously "occupied", "which piece", and "which color". Reordering `COLORS` silently recolors pieces; a piece matrix must be filled with its own index or rendering breaks.
+
+### The nut (`PIECES[8]`, `NUT`)
+
+A 3×3 ring with `0` in the center — the only piece whose interior cell is empty on purpose. Consequences:
+
+- It is rotation-invariant, so `tryRotate` is effectively a no-op on it.
+- The hole is sealed by the ring, so `merge()` leaves a cell nothing can ever fill; it only disappears when that row is completed and cleared. That is the intended difficulty.
+- `randomPiece()` is no longer a uniform 1-of-7: with probability `NUT_CHANCE` it returns `NUT`, otherwise one of the 7 standard pieces.
+- `drawNutHole()` paints the center cell as a ring (a `rect` plus an `arc` filled with `'evenodd'`, which punches the circle out instead of covering it with a theme-colored disc). It is called from `draw()` (ghost and current piece) and `drawNext()` at offset `+1,+1`, hardcoded because the hole is always the center of a 3×3 matrix. Locked nuts get no circle: the board only stores cell values, so a merged hole is an ordinary empty cell.
 
 ### Coupling between files
 

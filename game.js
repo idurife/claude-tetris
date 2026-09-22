@@ -13,6 +13,7 @@ const COLORS = [
   '#e57373', // Z - red
   '#90caf9', // J - azul pálido
   '#ffb74d', // L - orange
+  '#b0bec5', // TUERCA - gris metálico
 ];
 
 const PIECES = [
@@ -24,7 +25,15 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[8,8,8],[8,0,8],[8,8,8]],                  // TUERCA
 ];
+
+// La tuerca es la pieza de reto: al fijarse, su celda central vacía deja un
+// hueco que ninguna otra pieza puede rellenar (el anillo lo tapa por completo),
+// así que solo desaparece si se completa y se limpia esa fila. Por eso sale con
+// menos frecuencia que las 7 estándar.
+const NUT = 8;
+const NUT_CHANCE = 0.12;
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
@@ -52,7 +61,7 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+  const type = Math.random() < NUT_CHANCE ? NUT : Math.floor(Math.random() * 7) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -174,6 +183,20 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   context.globalAlpha = 1;
 }
 
+// Dibuja la celda central de la tuerca como un anillo: rellena el cuadrado y le
+// recorta un círculo con la regla 'evenodd', así el agujero deja ver el fondo
+// del tablero sin depender del color del tema. Solo se pinta mientras la pieza
+// cae (y en la vista previa); una vez fijada, el centro es una celda vacía más.
+function drawNutHole(context, x, y, size, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = COLORS[NUT];
+  context.beginPath();
+  context.rect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.arc(x * size + size / 2, y * size + size / 2, size * 0.34, 0, Math.PI * 2);
+  context.fill('evenodd');
+  context.globalAlpha = 1;
+}
+
 function drawGrid() {
   ctx.strokeStyle = GRID_COLORS[theme];
   ctx.lineWidth = 0.5;
@@ -208,11 +231,14 @@ function draw() {
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
         drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+  // el agujero siempre cae en el centro de la matriz 3x3 (la tuerca es simétrica)
+  if (current.type === NUT) drawNutHole(ctx, current.x + 1, gy + 1, BLOCK, 0.2);
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+  if (current.type === NUT) drawNutHole(ctx, current.x + 1, current.y + 1, BLOCK);
 }
 
 function drawNext() {
@@ -224,6 +250,7 @@ function drawNext() {
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
       drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+  if (next.type === NUT) drawNutHole(nextCtx, offX + 1, offY + 1, NB);
 }
 
 function endGame() {
