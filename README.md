@@ -17,6 +17,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 1: abrir el archivo directamente](#opción-1-abrir-el-archivo-directamente)
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
+  - [Power-ups](#power-ups)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
     - [2. `style.css`](#2-stylecss)
@@ -42,6 +43,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Vista previa** de la siguiente pieza.
 - **Sistema de puntuación** clásico de Tetris (100 / 300 / 500 / 800 multiplicado por nivel).
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
+- **Power-ups**: cada 5 líneas aparece una pieza especial de 1 × 1 con un efecto (bomba, rayo, tinte, gravedad, congelar). Ver [Power-ups](#power-ups).
 - **Pausa** y **Game Over** con opción de reinicio.
 
 ---
@@ -89,6 +91,24 @@ Después abre `http://localhost:8000` en el navegador.
 
 ---
 
+## Power-ups
+
+Cada **5 líneas** (`POWERUP_EVERY`) la siguiente pieza generada es un power-up: una celda única con un símbolo, que ya se ve en la vista previa `NEXT`. No se fija en el tablero — al aterrizar se **gasta** ejecutando su efecto sobre los bloques ya fijados. El panel lateral muestra en `POWER-UP` el último efecto usado y cuántas celdas afectó.
+
+| Símbolo | Power-up     | Efecto                                                                                              |
+| ------- | ------------ | --------------------------------------------------------------------------------------------------- |
+| 💣      | **Bomba**    | Vacía el área **3 × 3** centrada en la celda donde aterrizó (recortada si toca un borde).           |
+| ⚡      | **Rayo**     | Vacía por completo la **fila y la columna** de la celda donde aterrizó.                             |
+| 🎨      | **Tinte**    | Convierte en **comodines** todos los bloques del color más abundante del tablero.                   |
+| ⬇       | **Gravedad** | **Compacta** el tablero: cada columna cae hasta el fondo y desaparecen los huecos.                  |
+| ❄       | **Congelar** | **Detiene la caída automática 5 s**; mientras dura, sigues moviendo, rotando y soltando la pieza.    |
+
+La bomba y el rayo suman **20 puntos × nivel** por cada bloque destruido. Los demás no puntúan por sí mismos: su premio son las líneas que te dejan completar (la gravedad, de hecho, puede cerrar filas al compactar y se limpian al instante).
+
+**Los comodines** (celdas violetas con un rombo) son la parte interesante del tinte: cuentan como celda llena para completar una línea, pero **las piezas los atraviesan y los sobrescriben**, así que abren paso dentro de una pila mal hecha — incluso hacia los huecos que dejan las tuercas fijadas.
+
+---
+
 ## Cómo funciona
 
 El juego se compone de tres archivos que cooperan:
@@ -98,7 +118,7 @@ El juego se compone de tres archivos que cooperan:
 Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
-- Un panel lateral con `SCORE`, `LINES`, `LEVEL`, vista de la siguiente pieza y la lista de controles.
+- Un panel lateral con `SCORE`, `LINES`, `LEVEL`, `POWER-UP`, vista de la siguiente pieza, la lista de controles y la leyenda de power-ups.
 - Un overlay para los estados **PAUSA** y **GAME OVER**.
 
 ### 2. `style.css`
@@ -109,7 +129,7 @@ Aporta el aspecto visual con estética _dark / retro arcade_: fondo oscuro, tipo
 
 Contiene toda la lógica del juego. A grandes rasgos:
 
-- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–8) que identifica la pieza.
+- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–8 para las piezas, 14 para un comodín) que identifica la pieza.
 - **Piezas**: definidas como matrices cuadradas. Para rotar se calcula la transposición + reverso de filas (`rotateCW`). La tuerca (`PIECES[8]`) es el anillo `3 × 3` con el centro a `0`: es simétrica, así que rotarla no cambia nada.
 - **Agujero de la tuerca** (`drawNutHole`): la celda central se pinta como un anillo (rectángulo con un círculo recortado mediante `fill('evenodd')`) mientras la pieza cae y en la vista previa; una vez fijada, el centro es simplemente una celda vacía del tablero.
 - **Detección de colisiones** (`collide`): comprueba que ninguna celda de la pieza salga del tablero ni se solape con bloques ya fijados.
@@ -119,6 +139,7 @@ Contiene toda la lógica del juego. A grandes rasgos:
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` multiplicada por el nivel actual; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
 - **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
+- **Power-ups** (`applyPowerUp`): `clearLines` marca `pendingPowerUp` cada `POWERUP_EVERY` líneas y `randomPiece` devuelve entonces una pieza especial. `lockPiece` llama a `applyPowerUp` **en lugar de** `merge`, así que su valor nunca llega al tablero: solo queda el efecto (`blast`, `bolt`, `dye`, `compact` o `freezeMs`). El congelado se descuenta con el `dt` del bucle, de modo que pausar no lo consume.
 
 ### Flujo del juego
 
@@ -160,7 +181,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 03-tetris/
 ├── index.html      # Estructura del DOM y canvas
 ├── style.css       # Estilos del juego (dark theme)
-├── game.js         # Toda la lógica del Tetris (~300 líneas)
+├── game.js         # Toda la lógica del Tetris (~570 líneas)
 └── README.md
 ```
 
@@ -177,6 +198,9 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `BLOCK`        | Tamaño en píxeles de cada celda          | `30`                  |
 | `COLORS`       | Paleta de colores por tipo de pieza      | 8 colores             |
 | `NUT_CHANCE`   | Probabilidad de que salga una tuerca     | `0.12`                |
+| `POWERUP_EVERY`| Líneas entre power-ups                   | `5`                   |
+| `POWERUP_SCORE`| Puntos por bloque destruido (× nivel)    | `20`                  |
+| `FREEZE_MS`    | Duración del congelado en ms             | `5000`                |
 | `LINE_SCORES`  | Puntos por 1, 2, 3 o 4 líneas eliminadas | `[0,100,300,500,800]` |
 | `dropInterval` | Velocidad inicial de caída en ms         | `1000`                |
 

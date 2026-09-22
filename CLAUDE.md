@@ -29,7 +29,9 @@ No classes, no closures, no state container. Any new feature is another top-leve
 
 ### The color index is the piece type
 
-`PIECES[1..8]` are matrices whose non-zero cells hold their own type number, and that same number indexes `COLORS` and is what gets written into `board` cells (`0` = empty). So a cell value is simultaneously "occupied", "which piece", and "which color". Reordering `COLORS` silently recolors pieces; a piece matrix must be filled with its own index or rendering breaks.
+`PIECES[1..13]` are matrices whose non-zero cells hold their own type number, and that same number indexes `COLORS` and is what gets written into `board` cells (`0` = empty). So a cell value is simultaneously "occupied", "which piece", and "which color". Reordering `COLORS` silently recolors pieces; a piece matrix must be filled with its own index or rendering breaks.
+
+The one exception is `WILD` (`14`): it is a board cell value with no piece, so `PIECES[14]` is `null` — `randomPiece()` must never return it.
 
 ### The nut (`PIECES[8]`, `NUT`)
 
@@ -40,16 +42,27 @@ A 3×3 ring with `0` in the center — the only piece whose interior cell is emp
 - `randomPiece()` is no longer a uniform 1-of-7: with probability `NUT_CHANCE` it returns `NUT`, otherwise one of the 7 standard pieces.
 - `drawNutHole()` paints the center cell as a ring (a `rect` plus an `arc` filled with `'evenodd'`, which punches the circle out instead of covering it with a theme-colored disc). It is called from `draw()` (ghost and current piece) and `drawNext()` at offset `+1,+1`, hardcoded because the hole is always the center of a 3×3 matrix. Locked nuts get no circle: the board only stores cell values, so a merged hole is an ordinary empty cell.
 
+### Power-ups (`PIECES[9..13]`, `WILD`)
+
+`BOMB`/`BOLT`/`DYE`/`GRAVITY`/`FREEZE` = types `9..13`, each a 1×1 matrix, so rotation is a no-op and `makePiece()` centers them at column 5.
+
+- **Scheduling**: `clearLines()` sets `pendingPowerUp` when `lines` reaches `nextPowerUpLines` (`POWERUP_EVERY` = 5) and advances the threshold to the next multiple, so at most one power-up is queued per clear. `randomPiece()` consumes the flag before the nut/standard branch, which means the power-up shows up in the NEXT preview first and only falls one piece later.
+- **They are consumed, not merged**: `lockPiece()` calls `applyPowerUp()` *instead of* `merge()` for these types, so a power-up value never reaches `board` — nothing in the board renderer or `clearLines` has to know about them. `clearLines()` still runs right after, because `compact()` can complete rows.
+- Effects operate on the landing cell `(current.x, current.y)`: `blast()` (3×3, clipped at the edges), `bolt()` (whole row + column; the intersection is already `0` on the second pass, so it is counted once), `dye()` (most abundant color → `WILD`), `compact()` (per-column fall, `write` pointer), `FREEZE` (just sets `freezeMs`). Only `blast`/`bolt` score: `cells × POWERUP_SCORE × level`.
+- **`WILD` is passable**: `collide()` skips cells equal to `WILD`, so pieces fall *through* comodín cells and `merge()` overwrites them — that is the whole point of Tinte. `clearLines()` uses `v !== 0`, so a comodín still counts as a filled cell for completing a row. Any new board scan has to decide which of the two rules it follows.
+- **Freeze lives in `loop()`**: while `freezeMs > 0` the auto-drop branch is skipped entirely (`dropAccum` pinned to `0`) and the remaining time is decremented by `dt`, so `togglePause()` does not burn the effect. Keyboard moves, rotation, soft drop and hard drop all still work while frozen — only gravity stops.
+- Rendering: `drawGlyph()` paints the emoji over the 1×1 cell (ghost, current piece and NEXT preview) — it must set `fillStyle` itself, because `drawBlock()` leaves it on `HIGHLIGHT_COLORS[theme]` (a ~10% alpha color) and a monochrome glyph inherited from it comes out invisible; the same trap applies to anything else drawn after a block, `drawWild()` paints comodines translucent with a diamond, and `draw()` strokes a frame in the freeze color while the effect is active. `powerLabel` / `updatePowerStatus()` drive `#power-status`, which shows the freeze countdown while frozen and the last power-up used otherwise.
+
 ### Coupling between files
 
-- `game.js` grabs all DOM nodes by id at load time (`board`, `next-canvas`, `score`, `lines`, `level`, `overlay`, `overlay-title`, `overlay-score`, `restart-btn`). Renaming an id in `index.html` throws at startup.
+- `game.js` grabs all DOM nodes by id at load time (`board`, `next-canvas`, `score`, `lines`, `level`, `power-status`, `overlay`, `overlay-title`, `overlay-score`, `restart-btn`). Renaming an id in `index.html` throws at startup.
 - `<canvas id="board">` is hardcoded `300×600`; it must equal `COLS*BLOCK × ROWS*BLOCK`. Changing `COLS`/`ROWS`/`BLOCK` requires editing `index.html` too.
 - `drawNext()` centers the preview in a fixed 4×4 grid at 30px — that's why `#next-canvas` is `120×120`.
 - One `#overlay` element serves both PAUSE and GAME OVER; the two states differ only by the text written into `#overlay-title` / `#overlay-score`.
 
 ### Game loop
 
-`requestAnimationFrame` accumulating `dropAccum`; when it exceeds `dropInterval` the piece drops one row or `lockPiece()` runs (`merge` → `clearLines` → `spawn`). `dropAccum` is reset to `0`, not decremented by the interval, so drop timing quantizes to frame boundaries.
+`requestAnimationFrame` accumulating `dropAccum`; when it exceeds `dropInterval` the piece drops one row or `lockPiece()` runs (`merge` → `clearLines` → `spawn`). `dropAccum` is reset to `0`, not decremented by the interval, so drop timing quantizes to frame boundaries. While `freezeMs > 0` that whole branch is skipped (see Power-ups).
 
 Pause/resume works by `cancelAnimationFrame` and then calling `loop(performance.now())` directly — resuming does not go through `init()`. `init()` doubles as the restart handler for the button.
 
