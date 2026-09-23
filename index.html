@@ -51,7 +51,7 @@
             <li><kbd>↑</kbd> rotar</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
-            <li><kbd>P</kbd> pausa</li>
+            <li><kbd>P</kbd> <kbd>Esc</kbd> pausa</li>
           </ul>
         </div>
 
@@ -72,6 +72,34 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <div id="pause-menu" class="pause-menu hidden" role="dialog" aria-modal="true" aria-label="Menú de pausa">
+          <button type="button" class="pause-option" id="resume-btn">Reanudar</button>
+          <button type="button" class="pause-option" id="menu-restart-btn">Reiniciar</button>
+          <button type="button" class="pause-option" id="menu-controls-btn" aria-expanded="false" aria-controls="menu-controls">Ver controles</button>
+          <ul id="menu-controls" class="menu-controls hidden">
+            <li><kbd>&larr;</kbd><kbd>&rarr;</kbd> mover</li>
+            <li><kbd>&uarr;</kbd> rotar</li>
+            <li><kbd>&darr;</kbd> bajar</li>
+            <li><kbd>Space</kbd> ca&iacute;da</li>
+            <li><kbd>P</kbd> <kbd>Esc</kbd> pausa</li>
+          </ul>
+          <div class="pause-level">
+            <label class="label" for="start-level">NIVEL INICIAL</label>
+            <select id="start-level">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+          <p class="pause-hint">Se aplica en la pr&oacute;xima partida</p>
+        </div>
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>

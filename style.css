@@ -282,3 +282,112 @@ kbd {
 #restart-btn:hover {
   background: var(--restart-hover-bg);
 }
+
+/* ---- Menú de pausa ---- */
+/* Las variables propias se declaran aquí, en los dos temas, en vez de dentro de
+   los bloques de arriba: así todo el menú de pausa (marcado, colores y reglas)
+   queda en un único sitio del archivo. Cualquier color nuevo necesita las dos
+   versiones, porque el tema claro solo redefine variables. */
+:root {
+  --menu-btn-bg: #22223a;
+  --menu-btn-color: #e0e0e0;
+  --menu-btn-border: #3a3a5a;
+  --menu-btn-hover-bg: #2e2e52;
+  --menu-hint-color: #888;
+}
+
+body.light-theme {
+  --menu-btn-bg: #e4e4ee;
+  --menu-btn-color: #2a2a35;
+  --menu-btn-border: #c8c8d8;
+  --menu-btn-hover-bg: #d4d4e6;
+  --menu-hint-color: #666677;
+}
+
+.pause-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  width: 200px;
+  text-align: left;
+}
+
+.pause-menu.hidden {
+  display: none;
+}
+
+/* showPauseMenu()/hidePauseMenu() esconden el botón Reiniciar del overlay
+   mientras el menú muestra el suyo; en game over el menú no se abre y el botón
+   sigue ahí. */
+#restart-btn.hidden {
+  display: none;
+}
+
+.pause-option {
+  background: var(--menu-btn-bg);
+  color: var(--menu-btn-color);
+  border: 1px solid var(--menu-btn-border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pause-option:hover {
+  background: var(--menu-btn-hover-bg);
+}
+
+.pause-option:focus-visible,
+#start-level:focus-visible {
+  outline: 2px solid var(--value-color);
+  outline-offset: 2px;
+}
+
+.menu-controls {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
+.menu-controls.hidden {
+  display: none;
+}
+
+.menu-controls li {
+  font-size: 12px;
+  color: var(--controls-color);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pause-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#start-level {
+  background: var(--menu-btn-bg);
+  color: var(--menu-btn-color);
+  border: 1px solid var(--menu-btn-border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pause-hint {
+  font-size: 11px;
+  color: var(--menu-hint-color);
+  text-align: center;
+}

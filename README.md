@@ -208,6 +208,35 @@ Algunos parámetros fáciles de tunear en `game.js`:
 
 ---
 
+## Menú de pausa
+
+Al pausar (<kbd>P</kbd> o <kbd>Esc</kbd>) el overlay deja de ser un simple cartel de `PAUSA` y
+muestra un menú navegable con cuatro opciones:
+
+| Opción | Qué hace |
+| ------- | --------- |
+| **Reanudar** | Vuelve a la partida, igual que pulsar <kbd>P</kbd> otra vez. |
+| **Reiniciar** | Empieza una partida nueva sin recargar la página. |
+| **Ver controles** | Despliega la lista de teclas dentro del propio menú. |
+| **Nivel inicial** | Selector de 1 a 10 que se aplica a la **próxima** partida. |
+
+Detalles:
+
+- Se abre y se cierra con <kbd>P</kbd> o <kbd>Esc</kbd>, y con el ratón desde las opciones.
+  <kbd>↑</kbd> y <kbd>↓</kbd> mueven el foco entre los botones y <kbd>Tab</kbd> recorre todo el
+  menú sin salirse de él; al selector de nivel se llega con <kbd>Tab</kbd> o con el ratón, y
+  allí las flechas cambian el valor.
+- Mientras el menú está abierto el juego no recibe teclas: no se mueve, ni rota, ni cae la
+  pieza. Al reanudar se le quita el foco al botón pulsado, para que <kbd>Space</kbd> o
+  <kbd>Enter</kbd> no lo vuelvan a activar sin querer.
+- El nivel inicial se guarda en `localStorage` bajo la clave `tetris-start-level` y se
+  recupera al cargar la página. La partida arranca en ese nivel con su velocidad de caída
+  correspondiente, y a partir de ahí sube una vez cada 10 líneas
+  (`nivel = nivel de inicio de la partida + líneas / 10`). Cambiar el selector con una
+  partida en marcha no la altera: el nivel de arranque se copia al empezar.
+- El menú solo aparece en pausa: en *game over* el overlay sigue mostrando la puntuación y
+  el botón **Reiniciar** de siempre.
+
 ## Licencia
 
 Proyecto de uso libre con fines educativos y de práctica.
