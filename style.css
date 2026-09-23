@@ -282,3 +282,59 @@ kbd {
 #restart-btn:hover {
   background: var(--restart-hover-bg);
 }
+
+/* ---- Skins ---- */
+.skin-select {
+  width: 100%;
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.skin-select:focus-visible {
+  outline: 2px solid var(--value-color);
+  outline-offset: 1px;
+}
+
+/* Neón: el tablero va siempre sobre negro, también en modo claro. Es la gracia
+   del skin, así que aquí sí se fuerzan los colores en vez de heredar el tema
+   (las dos reglas son iguales a propósito; la segunda solo gana en especificidad
+   a body.light-theme). */
+body.skin-neon {
+  --board-bg: #05050e;
+  --board-border: #3a2a6a;
+  --board-shadow: rgba(120, 40, 220, 0.45);
+}
+
+body.light-theme.skin-neon {
+  --board-bg: #05050e;
+  --board-border: #3a2a6a;
+  --board-shadow: rgba(120, 40, 220, 0.45);
+}
+
+/* Pastel y pixel art sí respetan el tema: cada uno define su fondo de tablero
+   en las dos variantes. */
+body.skin-pastel {
+  --board-bg: #1e1e2b;
+  --board-border: #35354a;
+}
+
+body.light-theme.skin-pastel {
+  --board-bg: #fbf7ff;
+  --board-border: #ded6ea;
+}
+
+body.skin-pixel {
+  --board-bg: #14141c;
+  --board-border: #3a3a4a;
+}
+
+body.light-theme.skin-pixel {
+  --board-bg: #f4f4ec;
+  --board-border: #b9b9a8;
+}
