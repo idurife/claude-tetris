@@ -278,6 +278,28 @@ Detalles:
 - El menú solo aparece en pausa: en *game over* el overlay sigue mostrando la puntuación y
   el botón **Reiniciar** de siempre.
 
+## Tabla de records local
+
+Las mejores partidas se guardan en el navegador con `localStorage`, así que sobreviven a recargas y cierres del navegador (son locales: no se comparten entre equipos ni navegadores).
+
+- **Pantalla de inicio**: al abrir el juego ya no empieza la partida sola. Primero aparece la pantalla de inicio con el **top 5**, el **mejor combo** y las **líneas máximas** históricas, y dos botones: **Jugar** y **Borrar records**.
+- **Top 5 con nombre**: al terminar la partida, si la puntuación entra en el top 5 aparece un campo para escribir el nombre (por defecto `Jugador`, máximo 12 caracteres). Se guarda con **Guardar** o pulsando <kbd>Enter</kbd>.
+- **Fila resaltada**: tras guardar, la fila de la partida recién terminada se marca en color en la tabla del game over. Si pulsas **Reiniciar** sin guardar, la puntuación se guarda igualmente con el nombre que hubiera en el campo.
+- **Menú**: el botón **Menú** del game over vuelve a la pantalla de inicio (es la forma de volver a ver la tabla completa y el botón de borrar sin recargar).
+- **Combo**: racha de piezas consecutivas que limpian al menos una línea. Sube una vez por pieza (no una por línea) y se rompe cuando una pieza se fija sin completar ninguna. Los power-ups se consumen en vez de fijarse, así que **no rompen la racha**; si su efecto completa filas, la alargan igual que una pieza normal. De cada partida se guarda su mejor racha.
+- **Borrar records**: pide confirmación y vacía las claves de `localStorage`, refrescando la tabla en pantalla.
+
+Claves usadas (mismo prefijo que el tema, `tetris-`):
+
+| Clave                  | Contenido                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `tetris-records`       | `[{ name, score, lines, level, combo, date }]` ordenado por `score` desc, máx. 5 |
+| `tetris-records-best`  | `{ combo, lines }`: mejor combo y líneas máximas de todas las partidas         |
+
+Si el navegador no deja escribir en `localStorage` (modo privado, cuota llena), el juego lo detecta: no pide el nombre —guardar no haría nada— y la tabla lo dice en vez de fingir que no hay records.
+
+Lo que se lee de `localStorage` se trata como **entrada no confiable**: el `JSON.parse` va en `try/catch`, se descarta cualquier entrada que no tenga los campos y tipos esperados, y el nombre del jugador se pinta siempre con `textContent` (nunca con `innerHTML`) y recortado a 12 caracteres.
+
 ---
 
 ## Licencia

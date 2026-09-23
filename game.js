@@ -201,12 +201,27 @@ const startLevelSelect = document.getElementById('start-level');
 // El tope de nivel inicial sale del propio selector: los <option> de
 // index.html son la fuente de verdad y así no hay dos listas que cuadrar.
 const MAX_START_LEVEL = startLevelSelect.options.length;
+const startScreen = document.getElementById('start-screen');
+const startBtn = document.getElementById('start-btn');
+const startRecords = document.getElementById('start-records');
+const startBest = document.getElementById('start-best');
+const resetRecordsBtn = document.getElementById('reset-records-btn');
+const recordsPanel = document.getElementById('records-panel');
+const recordsBest = document.getElementById('records-best');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name-input');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const menuBtn = document.getElementById('menu-btn');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let pendingPowerUp, nextPowerUpLines, freezeMs, powerLabel;
 let theme = 'dark';
 let skin = 'retro', colors = SKIN_PALETTES.retro, drawBlockSkin = drawBlockRetro;
 let startLevel = 1, baseLevel = 1;
+// Estado de la tabla de records: racha actual, mejor racha de la partida, si el
+// juego ya arrancó (antes solo se ve la pantalla de inicio) y si falta guardar
+// la puntuación recién conseguida.
+let combo = 0, bestCombo = 0, started = false, recordPending = false, storageOk = true;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -281,6 +296,10 @@ function clearLines() {
     }
   }
   if (cleared) {
+    // Combo: racha de piezas consecutivas que limpian al menos una fila (sube
+    // una vez por pieza, no una por fila).
+    combo++;
+    if (combo > bestCombo) bestCombo = combo;
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
     level = baseLevel + Math.floor(lines / 10);
@@ -318,10 +337,16 @@ function softDrop() {
 }
 
 function lockPiece() {
+  const linesBefore = lines;
+  const wasPowerUp = isPowerUp(current.type);
   // un power-up se gasta en vez de fijarse: nunca llega al tablero
   if (isPowerUp(current.type)) applyPowerUp(current.type, current.x, current.y);
   else merge();
   clearLines();
+  // La racha solo la rompe una pieza que se FIJA sin completar filas. Un
+  // power-up se consume en vez de fijarse, así que nunca corta el combo; pero
+  // si su efecto completa filas, clearLines() lo alarga igual que una pieza.
+  if (!wasPowerUp && lines === linesBefore) combo = 0;
   spawn();
 }
 
@@ -646,6 +671,7 @@ function endGame() {
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
+  showGameOverRecords();
 }
 
 function setTheme(mode) {
@@ -834,7 +860,272 @@ function cycleFocus(items, step) {
   items[to].focus({ preventScroll: true });
 }
 
+// ---- Tabla de records ----
+// Los records viven en localStorage: 'tetris-records' guarda la tabla top 5
+// ([{ name, score, lines, level, combo, date }] ordenada por score desc) y
+// 'tetris-records-best' el mejor combo y las líneas máximas históricas. Todo lo
+// que sale de localStorage es entrada no confiable: se valida entrada por
+// entrada y el nombre del jugador se pinta siempre con textContent.
+const RECORDS_KEY = 'tetris-records';
+const RECORDS_BEST_KEY = 'tetris-records-best';
+const MAX_RECORDS = 5;
+const MAX_NAME = 12;
+const DEFAULT_NAME = 'Jugador';
+
+function isFiniteNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isValidRecord(r) {
+  return !!r && typeof r === 'object' && !Array.isArray(r)
+    && typeof r.name === 'string'
+    && typeof r.date === 'string'
+    && isFiniteNumber(r.score) && isFiniteNumber(r.lines)
+    && isFiniteNumber(r.level) && isFiniteNumber(r.combo);
+}
+
+function toCount(v) {
+  return Math.max(0, Math.floor(v));
+}
+
+// Acceso crudo a localStorage: en navegación privada o con el almacenamiento
+// bloqueado, hasta getItem lanza. Eso (y no un JSON corrupto) es lo que marca
+// storageOk a false, para poder avisar de que no se pueden guardar records.
+function readRaw(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    storageOk = false;
+    return null;
+  }
+}
+
+// Lee la tabla descartando cualquier cosa que no encaje en el formato.
+function loadRecords() {
+  let raw;
+  try {
+    raw = JSON.parse(readRaw(RECORDS_KEY));
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(isValidRecord)
+    .map(r => ({
+      name: r.name.trim().slice(0, MAX_NAME) || DEFAULT_NAME,
+      score: toCount(r.score),
+      lines: toCount(r.lines),
+      level: toCount(r.level),
+      combo: toCount(r.combo),
+      date: r.date.slice(0, 10),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_RECORDS);
+}
+
+// Records globales (no por partida): mejor combo y líneas máximas.
+function loadBest() {
+  let raw;
+  try {
+    raw = JSON.parse(readRaw(RECORDS_BEST_KEY));
+  } catch (e) {
+    raw = null;
+  }
+  const ok = !!raw && typeof raw === 'object' && !Array.isArray(raw);
+  return {
+    combo: ok && isFiniteNumber(raw.combo) ? toCount(raw.combo) : 0,
+    lines: ok && isFiniteNumber(raw.lines) ? toCount(raw.lines) : 0,
+  };
+}
+
+// localStorage puede fallar (cuota llena, modo privado): si pasa, los records
+// se pierden pero la partida sigue. Devuelve si se llegó a guardar, porque la
+// tabla no debe resaltar una fila que en realidad no se ha escrito.
+function saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    storageOk = false;
+    return false;
+  }
+}
+
+// Fecha local (no UTC): con toISOString, una partida terminada por la noche se
+// guardaría con la fecha del día siguiente.
+function todayISO() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function qualifiesForTop(sc, records) {
+  if (sc <= 0) return false;
+  return records.length < MAX_RECORDS || sc > records[records.length - 1].score;
+}
+
+// Pinta la tabla dentro de un contenedor. highlight es el índice de la fila de
+// la partida recién guardada (-1 = ninguna). Solo textContent: el nombre lo
+// escribe el jugador y nunca debe interpretarse como HTML.
+function renderRecordsInto(container, records, highlight) {
+  container.textContent = '';
+  if (!records.length) {
+    const vacio = document.createElement('p');
+    vacio.className = 'records-empty';
+    vacio.textContent = storageOk
+      ? 'Todavía no hay records. ¡Juega una partida!'
+      : 'Este navegador no permite guardar records.';
+    container.appendChild(vacio);
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'records-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  for (const titulo of ['#', 'Nombre', 'Puntos', 'Líneas', 'Niv', 'Combo', 'Fecha']) {
+    const th = document.createElement('th');
+    th.textContent = titulo;
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  records.forEach((rec, i) => {
+    const tr = document.createElement('tr');
+    if (i === highlight) tr.className = 'records-highlight';
+    const celdas = [
+      String(i + 1),
+      rec.name,
+      rec.score.toLocaleString(),
+      String(rec.lines),
+      String(rec.level),
+      `×${rec.combo}`,
+      rec.date,
+    ];
+    celdas.forEach((texto, j) => {
+      const td = document.createElement('td');
+      if (j === 1) {
+        td.className = 'records-name';
+        td.title = texto;
+      }
+      td.textContent = texto;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+// Refresca las dos pantallas a la vez (inicio y game over) para que ninguna
+// quede con datos viejos.
+function refreshRecords(highlight) {
+  const records = loadRecords();
+  const best = loadBest();
+  const resumen = `Mejor combo: ×${best.combo}  ·  Líneas máximas: ${best.lines}`;
+  renderRecordsInto(startRecords, records, highlight);
+  renderRecordsInto(recordsPanel, records, highlight);
+  startBest.textContent = resumen;
+  recordsBest.textContent = resumen;
+}
+
+// El overlay lo comparten PAUSA y GAME OVER: la tabla y el formulario solo
+// deben verse al terminar la partida, así que init() los vuelve a ocultar.
+function hideRecordsOverlay() {
+  recordPending = false;
+  nameForm.classList.add('hidden');
+  recordsPanel.classList.add('hidden');
+  recordsBest.classList.add('hidden');
+  menuBtn.classList.add('hidden');
+}
+
+// Al terminar la partida: actualiza los records globales, muestra la tabla y
+// pide el nombre solo si la puntuación entra en el top 5.
+function showGameOverRecords() {
+  const best = loadBest();
+  const guardado = saveJSON(RECORDS_BEST_KEY, {
+    combo: Math.max(best.combo, bestCombo),
+    lines: Math.max(best.lines, lines),
+  });
+  const records = loadRecords();
+  // Si no se puede escribir en localStorage no tiene sentido pedir el nombre:
+  // el guardado sería un no-op y la tabla seguiría igual.
+  recordPending = guardado && qualifiesForTop(score, records);
+  nameForm.classList.toggle('hidden', !recordPending);
+  recordsPanel.classList.remove('hidden');
+  recordsBest.classList.remove('hidden');
+  menuBtn.classList.remove('hidden');
+  refreshRecords(-1);
+  if (recordPending) {
+    nameInput.value = DEFAULT_NAME;
+    nameInput.focus();
+    nameInput.select();
+  }
+}
+
+// Guarda la partida recién terminada con el nombre escrito y resalta su fila.
+function saveCurrentRecord() {
+  if (!recordPending) return;
+  recordPending = false;
+  const entrada = {
+    name: nameInput.value.trim().slice(0, MAX_NAME) || DEFAULT_NAME,
+    score,
+    lines,
+    level,
+    combo: bestCombo, // el mejor combo de esa partida
+    date: todayISO(),
+  };
+  const records = loadRecords();
+  records.push(entrada);
+  records.sort((a, b) => b.score - a.score);
+  const top = records.slice(0, MAX_RECORDS);
+  // refreshRecords() vuelve a leer de localStorage: si la escritura falló, la
+  // tabla pintada es la vieja y no debe resaltarse ninguna fila.
+  const guardado = saveJSON(RECORDS_KEY, top);
+  nameForm.classList.add('hidden');
+  refreshRecords(guardado ? top.indexOf(entrada) : -1);
+}
+
+function resetRecords() {
+  if (!confirm('¿Borrar todos los records? Esta acción no se puede deshacer.')) return;
+  try {
+    localStorage.removeItem(RECORDS_KEY);
+    localStorage.removeItem(RECORDS_BEST_KEY);
+  } catch (e) {
+    /* sin persistencia: la tabla se repinta vacía igualmente */
+  }
+  recordPending = false;
+  nameForm.classList.add('hidden');
+  refreshRecords(-1);
+}
+
+function showStartScreen() {
+  refreshRecords(-1);
+  startScreen.classList.remove('hidden');
+}
+
+// Vuelta al menú desde el game over: sin esto, la tabla completa y el botón de
+// borrar records solo se verían al recargar la página. El botón solo está
+// visible con la partida terminada, así que no hay ninguna en curso que cortar.
+function backToStart() {
+  saveCurrentRecord();
+  hideRecordsOverlay();
+  overlay.classList.add('hidden');
+  started = false;
+  showStartScreen();
+}
+
+function startGame() {
+  startScreen.classList.add('hidden');
+  init();
+}
+
 function init() {
+  // Reiniciar sin pulsar Guardar no debe tirar la puntuación: si quedaba un
+  // record pendiente se guarda con el nombre escrito (o 'Jugador'). Va lo
+  // primero, antes de que score/lines/level se pongan a cero.
+  saveCurrentRecord();
   board = createBoard();
   score = 0;
   lines = 0;
@@ -850,6 +1141,10 @@ function init() {
   nextPowerUpLines = POWERUP_EVERY;
   freezeMs = 0;
   powerLabel = '';
+  combo = 0;
+  bestCombo = 0;
+  started = true;
+  hideRecordsOverlay();
   lastTime = performance.now();
   next = randomPiece();
   spawn();
@@ -861,6 +1156,7 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (!started) return; // aún se ve la pantalla de inicio: no hay partida que controlar
   // Escape pausa igual que P, salvo dentro del selector de nivel: allí cierra su lista
   if (e.code === 'KeyP' || (e.code === 'Escape' && document.activeElement !== startLevelSelect)) { togglePause(); return; }
   if (paused || gameOver) return;
@@ -902,4 +1198,14 @@ loadStartLevel();
 
 setTheme(localStorage.getItem('tetris-theme') === 'light' ? 'light' : 'dark');
 
-init();
+startBtn.addEventListener('click', startGame);
+resetRecordsBtn.addEventListener('click', resetRecords);
+saveScoreBtn.addEventListener('click', saveCurrentRecord);
+menuBtn.addEventListener('click', backToStart);
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveCurrentRecord();
+});
+
+// La partida ya no arranca sola: primero se ve la pantalla de inicio con la
+// tabla de records. init() sigue siendo el handler de #restart-btn.
+showStartScreen();

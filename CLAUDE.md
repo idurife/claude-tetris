@@ -132,3 +132,57 @@ Pausing opens a menu inside the existing `#overlay`, as a new sibling after `#ov
 - **Start level**: `startLevel` is the persisted preference (`localStorage`, key `tetris-start-level`, validated in `setStartLevel()` to an integer 1..`MAX_START_LEVEL`, otherwise 1); `baseLevel` is the level the *current* game started at. `init()` copies one into the other, and `clearLines()` computes `level = baseLevel + Math.floor(lines / 10)` — that split is what makes changing the selector mid-game affect only the next one. `MAX_START_LEVEL` is derived from `startLevelSelect.options.length`, so the `<option>` list in `index.html` is the single source of truth for the range. `levelInterval()` is the one copy of the `Math.max(100, 1000 - (level - 1) * 90)` formula, used by both `init()` and `clearLines()`.
 - The menu's key list is a copy of the one in `.panel-section.controls`, not a move: both exist, and adding a key means updating both.
 - Its CSS is one block at the end of `style.css`, including its own `:root` / `body.light-theme` variable pair, so the whole feature stays in one place; any new color needs both halves, since the light theme only redefines variables.
+
+### Local records table (`localStorage`)
+
+Two keys, both read as **untrusted input**: `tetris-records` holds the top 5
+(`[{ name, score, lines, level, combo, date }]`, sorted by `score` desc) and
+`tetris-records-best` holds `{ combo, lines }` — the all-time best combo and max
+lines. `loadRecords()` / `loadBest()` wrap `JSON.parse` in `try/catch`, drop any
+entry that fails `isValidRecord()`, clamp the numbers and trim the name to 12
+chars; `renderRecordsInto()` builds the table with `createElement` +
+`textContent` only, because the name is player-written. Writes go through
+`saveJSON()`, which swallows quota/private-mode failures so a full disk never
+breaks the game.
+
+- **The game no longer auto-starts.** The script ends with `showStartScreen()`
+  instead of `init()`: `#start-screen` (a sibling of `#overlay` inside
+  `.wrapper`) covers the board until *Jugar* calls `startGame()` → `init()`.
+  `init()` is still the `#restart-btn` handler and now also sets `started = true`.
+  The `keydown` listener returns early while `!started`, otherwise a key pressed
+  on the start screen would hit `current`/`paused` while they are still
+  `undefined`.
+- **`#overlay` is shared with PAUSE**, so `#records-panel`, `#records-best` and
+  `#name-form` start hidden, are revealed only by `showGameOverRecords()` (called
+  at the end of `endGame()`) and are hidden again by `hideRecordsOverlay()` from
+  `init()`. That keeps the pause overlay clean without touching `togglePause()`.
+- **Combo**: `clearLines()` increments `combo` once per clearing piece (not per
+  line) and tracks `bestCombo`; `lockPiece()` resets `combo` to `0` only when a
+  piece that actually *merged* cleared nothing (`!wasPowerUp && lines ===
+  linesBefore`). A power-up is consumed instead of merged, so it never breaks the
+  streak, and if its effect completes rows `clearLines()` extends it. `combo` and
+  `bestCombo` reset in `init()`; the saved `combo` field is that game's best.
+- **Saving is one-shot**: `recordPending` gates `saveCurrentRecord()`, so a
+  second click on *Guardar* cannot duplicate the entry. The highlighted row comes
+  from `top.indexOf(entrada)` after the sort+slice, so it is `-1` (no highlight)
+  if the entry did not survive the cut — and also `-1` when the write itself
+  failed, because `refreshRecords()` re-reads from `localStorage` and would
+  otherwise highlight somebody else's row. `init()` calls `saveCurrentRecord()`
+  as its *first* statement (before `score`/`lines`/`level` are zeroed) so hitting
+  *Reiniciar* instead of *Guardar* does not silently drop a qualifying score.
+- **`#menu-btn`** (shown only on game over, like the rest of the records UI)
+  calls `backToStart()`: it saves anything pending, hides the overlay, sets
+  `started = false` and shows the start screen again. Without it the standings and
+  *Borrar records* would only be reachable by reloading the page.
+- **Storage failures are visible, not silent**: `readRaw()` / `saveJSON()` set
+  `storageOk = false` when `localStorage` itself throws (private mode, quota), and
+  then no name is requested (saving would be a no-op) and the empty table says so
+  instead of "play a game". A corrupt JSON value does *not* clear the flag — that
+  is bad data, not broken storage.
+- Dates use `todayISO()` (local `getFullYear/getMonth/getDate`), not
+  `toISOString()`, which would stamp an evening game with the next day in any
+  negative-offset timezone.
+- New ids in `index.html` (`game.js` resolves them at load, so renaming any of
+  them throws at startup): `start-screen`, `start-btn`, `start-records`,
+  `start-best`, `reset-records-btn`, `records-panel`, `records-best`,
+  `name-form`, `name-input`, `save-score-btn`, `menu-btn`.
