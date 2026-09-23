@@ -208,6 +208,47 @@ Algunos parámetros fáciles de tunear en `game.js`:
 
 ---
 
+## Skins visuales
+
+El panel lateral tiene un selector **SKIN** que cambia el aspecto completo del juego
+sin recargar la página ni perder la partida en curso: se cambian la paleta y la
+función que dibuja cada bloque, y se repintan el tablero y la vista previa.
+
+| Skin          | Aspecto                                                                       |
+| ------------- | ----------------------------------------------------------------------------- |
+| **Retro**     | Bloques cuadrados y colores planos con una franja de brillo. Es el de siempre. |
+| **Neón**      | Fondo de tablero negro, relleno tenue y contorno luminoso (halo en el canvas). |
+| **Pastel**    | Colores suaves y esquinas redondeadas.                                        |
+| **Pixel art** | Colores saturados, bisel de un píxel y una trama de puntos sobre cada bloque.  |
+
+La elección se guarda en `localStorage` bajo la clave `tetris-skin`. Si el valor
+guardado no es una de las cuatro claves (`retro`, `neon`, `pastel`, `pixel`), se
+usa `retro`.
+
+**Skin y tema son independientes.** El interruptor *modo claro* sigue funcionando
+igual y sigue guardándose en `tetris-theme`: cada skin define sus colores de
+rejilla para los dos temas. La única excepción es **Neón**, que fuerza el fondo
+oscuro del tablero también en modo claro (clase `body.skin-neon` en `style.css`),
+porque el efecto de glow solo se ve sobre negro.
+
+Para añadir un skin nuevo hacen falta cuatro cosas, todas con la misma clave:
+
+1. Una paleta en `SKIN_PALETTES` con **exactamente los mismos 15 índices que
+   `COLORS`** (`null` en el 0 y un color por tipo de pieza hasta el comodín, 14).
+   El índice del color es el tipo de pieza, así que reordenarla recolorea piezas.
+2. Una función `drawBlock<Nombre>(context, x, y, colorIndex, size, alpha)`
+   registrada en `SKIN_RENDERERS`, que **debe dejar el contexto limpio** al salir
+   (`globalAlpha`, `shadowBlur`, `lineWidth`).
+3. Una entrada en `SKIN_GRIDS` con sus variantes `dark` y `light`.
+4. Una `<option>` en el `<select id="skin-select">` de `index.html` (y, si el
+   tablero necesita otro fondo, una regla `body.skin-<clave>` en `style.css`).
+
+Opcionalmente, una entrada en `SKIN_GLYPH_INK` (tinta de los símbolos de
+power-up) y otra en `SKIN_NUT_ALPHA` (opacidad del anillo de la tuerca). Si se
+omiten se usan los valores por defecto (`GLYPH_INK` y `1`).
+
+---
+
 ## Licencia
 
 Proyecto de uso libre con fines educativos y de práctica.

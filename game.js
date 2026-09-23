@@ -88,6 +88,96 @@ const HIGHLIGHT_COLORS = { dark: 'rgba(255,255,255,0.12)', light: 'rgba(0,0,0,0.
 // que el mismo oscuro funciona en los dos temas.
 const GLYPH_INK = '#15151f';
 
+// ---- Skins ----
+// Cada skin aporta una paleta y una forma de dibujar el bloque. CRÍTICO: el
+// índice del color ES el tipo de pieza (y el valor que se guarda en board), así
+// que toda paleta tiene que repetir exactamente los 15 índices de COLORS: null
+// en el 0 y un color por tipo hasta el comodín (14). Solo cambian los valores;
+// reordenarlos recolorea piezas en silencio.
+const SKIN_PALETTES = {
+  retro: COLORS,
+  neon: [
+    null,
+    '#00f0ff', // I
+    '#ffee00', // O
+    '#c04dff', // T
+    '#39ff5e', // S
+    '#ff2d55', // Z
+    '#2f8bff', // J
+    '#ff9f1c', // L
+    '#9fd8ff', // TUERCA
+    '#ff3b3b', // BOMBA
+    '#fdff6a', // RAYO
+    '#ff4fd8', // TINTE
+    '#00ffc8', // GRAVEDAD
+    '#4fd8ff', // CONGELAR
+    '#d36bff', // COMODÍN
+  ],
+  pastel: [
+    null,
+    '#a8e6e2', // I
+    '#ffe6a7', // O
+    '#d7c4f2', // T
+    '#bfe3c0', // S
+    '#f5b7b1', // Z
+    '#bcd6f5', // J
+    '#f9d3a8', // L
+    '#d6dbe0', // TUERCA
+    '#f3a6a0', // BOMBA
+    '#fbf1a8', // RAYO
+    '#f6c1d9', // TINTE
+    '#a9ddd4', // GRAVEDAD
+    '#b7d4f2', // CONGELAR
+    '#ddc2ec', // COMODÍN
+  ],
+  pixel: [
+    null,
+    '#00b8c4', // I
+    '#f0c000', // O
+    '#8c3cd8', // T
+    '#3cb043', // S
+    '#d83030', // Z
+    '#2050d8', // J
+    '#f07818', // L
+    '#909890', // TUERCA
+    '#e02020', // BOMBA
+    '#f8e000', // RAYO
+    '#e05098', // TINTE
+    '#20a080', // GRAVEDAD
+    '#38a0e8', // CONGELAR
+    '#a050d8', // COMODÍN
+  ],
+};
+
+// Skin y tema son independientes: theme sigue siendo 'dark'/'light' y cada skin
+// define sus dos variantes de rejilla. La excepción es neón, que fuerza fondo
+// de tablero oscuro en los dos temas (clase body.skin-neon en el CSS), así que
+// sus dos variantes son iguales a propósito.
+const SKIN_GRIDS = {
+  retro: GRID_COLORS,
+  neon: { dark: '#221a4a', light: '#221a4a' },
+  pastel: { dark: '#2c2c3c', light: '#e6e0f0' },
+  pixel: { dark: '#2a2a38', light: '#c9c9b8' },
+};
+
+// Tinta de los glifos por skin: sobre los bloques oscuros del neón, el oscuro
+// de GLYPH_INK sería invisible. Se lee con valor por defecto, porque SKIN_NAMES
+// sale solo de SKIN_RENDERERS y un skin nuevo podría olvidarse de este mapa.
+const SKIN_GLYPH_INK = { retro: GLYPH_INK, neon: '#eaf6ff', pastel: GLYPH_INK, pixel: GLYPH_INK };
+
+// El anillo de la tuerca se atenúa en neón, donde el resto de bloques son
+// translúcidos y un cuadrado opaco desentonaría (también con valor por defecto).
+const SKIN_NUT_ALPHA = { retro: 1, neon: 0.55, pastel: 1, pixel: 1 };
+
+// Brillo del bloque pastel (dos variantes de tema) y trama del pixel art (va
+// siempre sobre el color del bloque, así que el mismo valor sirve en los dos).
+const PASTEL_GLOSS = { dark: 'rgba(255,255,255,0.40)', light: 'rgba(255,255,255,0.55)' };
+const PIXEL_LIGHT = 'rgba(255,255,255,0.32)';
+const PIXEL_DARK = 'rgba(0,0,0,0.28)';
+// Puntos de la trama en "píxeles" de textura: fijos, no aleatorios, o el bloque
+// parpadearía en cada frame.
+const PIXEL_DOTS = [[2, 2], [5, 3], [3, 5], [6, 6], [4, 7]];
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -101,10 +191,12 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let pendingPowerUp, nextPowerUpLines, freezeMs, powerLabel;
 let theme = 'dark';
+let skin = 'retro', colors = SKIN_PALETTES.retro, drawBlockSkin = drawBlockRetro;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -328,9 +420,22 @@ function updatePowerStatus() {
     : (powerLabel || '—');
 }
 
+// Punto de entrada único: todas las llamadas siguen pasando por aquí y el skin
+// activo decide cómo se pinta la celda.
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  drawBlockSkin(context, x, y, colorIndex, size, alpha);
+}
+
+// ---- Bloques por skin ----
+// Todos comparten la firma (context, x, y, colorIndex, size, alpha) y TIENEN que
+// dejar el contexto limpio al salir (globalAlpha, shadowBlur, lineWidth): lo que
+// se dibuje después — rejilla, fantasma, glifos, marco de hielo — hereda el
+// estado que dejen.
+
+// Retro: cuadrado plano con una franja de brillo arriba (el aspecto original).
+function drawBlockRetro(context, x, y, colorIndex, size, alpha) {
+  const color = colors[colorIndex];
   context.globalAlpha = alpha ?? 1;
   context.fillStyle = color;
   context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
@@ -340,13 +445,82 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   context.globalAlpha = 1;
 }
 
+// Neón: relleno tenue del propio color y contorno luminoso con halo
+// (shadowBlur + shadowColor). El halo se apaga antes de salir.
+function drawBlockNeon(context, x, y, colorIndex, size, alpha) {
+  const color = colors[colorIndex];
+  const a = alpha ?? 1;
+  const px = x * size, py = y * size;
+  context.globalAlpha = a * 0.28;
+  context.fillStyle = color;
+  context.fillRect(px + 2, py + 2, size - 4, size - 4);
+  context.globalAlpha = a;
+  context.shadowColor = color;
+  context.shadowBlur = size * 0.45;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(px + 3, py + 3, size - 6, size - 6);
+  context.shadowBlur = 0;
+  context.shadowColor = 'transparent';
+  context.lineWidth = 1;
+  context.globalAlpha = 1;
+}
+
+// Rectángulo de esquinas redondeadas a mano (nada de ctx.roundRect, que no está
+// en todos los navegadores). Deja el trazado listo para fill() o stroke().
+function roundedRectPath(context, px, py, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  context.beginPath();
+  context.moveTo(px + rr, py);
+  context.arcTo(px + w, py, px + w, py + h, rr);
+  context.arcTo(px + w, py + h, px, py + h, rr);
+  context.arcTo(px, py + h, px, py, rr);
+  context.arcTo(px, py, px + w, py, rr);
+  context.closePath();
+}
+
+// Pastel: colores suaves y esquinas redondeadas, con un brillo tenue arriba.
+function drawBlockPastel(context, x, y, colorIndex, size, alpha) {
+  const px = x * size + 1.5, py = y * size + 1.5;
+  const s = size - 3;
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = colors[colorIndex];
+  roundedRectPath(context, px, py, s, s, size * 0.28);
+  context.fill();
+  context.fillStyle = PASTEL_GLOSS[theme];
+  roundedRectPath(context, px + 3, py + 3, s - 6, s * 0.3, size * 0.12);
+  context.fill();
+  context.globalAlpha = 1;
+}
+
+// Pixel art: color plano, bisel de un "píxel" de textura y una trama fija de
+// puntos encima, para que el bloque parezca dibujado a baja resolución.
+function drawBlockPixel(context, x, y, colorIndex, size, alpha) {
+  const px = x * size, py = y * size;
+  const u = Math.max(2, Math.round(size / 10)); // lado del píxel de textura
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = colors[colorIndex];
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  // bisel claro arriba/izquierda
+  context.fillStyle = PIXEL_LIGHT;
+  context.fillRect(px + 1, py + 1, size - 2, u);
+  context.fillRect(px + 1, py + 1, u, size - 2);
+  // bisel oscuro abajo/derecha y trama de puntos
+  context.fillStyle = PIXEL_DARK;
+  context.fillRect(px + 1, py + size - 1 - u, size - 2, u);
+  context.fillRect(px + size - 1 - u, py + 1, u, size - 2);
+  for (const [dx, dy] of PIXEL_DOTS)
+    context.fillRect(px + 1 + dx * u, py + 1 + dy * u, u, u);
+  context.globalAlpha = 1;
+}
+
 // Dibuja la celda central de la tuerca como un anillo: rellena el cuadrado y le
 // recorta un círculo con la regla 'evenodd', así el agujero deja ver el fondo
 // del tablero sin depender del color del tema. Solo se pinta mientras la pieza
 // cae (y en la vista previa); una vez fijada, el centro es una celda vacía más.
 function drawNutHole(context, x, y, size, alpha) {
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = COLORS[NUT];
+  context.globalAlpha = (alpha ?? 1) * (SKIN_NUT_ALPHA[skin] ?? 1);
+  context.fillStyle = colors[NUT];
   context.beginPath();
   context.rect(x * size + 1, y * size + 1, size - 2, size - 2);
   context.arc(x * size + size / 2, y * size + size / 2, size * 0.34, 0, Math.PI * 2);
@@ -359,10 +533,10 @@ function drawNutHole(context, x, y, size, alpha) {
 function drawWild(context, x, y, size) {
   const px = x * size, py = y * size;
   context.globalAlpha = 0.4;
-  context.fillStyle = COLORS[WILD];
+  context.fillStyle = colors[WILD];
   context.fillRect(px + 1, py + 1, size - 2, size - 2);
   context.globalAlpha = 1;
-  context.strokeStyle = COLORS[WILD];
+  context.strokeStyle = colors[WILD];
   context.lineWidth = 1.5;
   context.beginPath();
   context.moveTo(px + size / 2, py + 5);
@@ -377,9 +551,9 @@ function drawWild(context, x, y, size) {
 // la esquina de su matriz).
 function drawGlyph(context, x, y, type, size, alpha) {
   context.globalAlpha = alpha ?? 1;
-  // drawBlock deja el fillStyle en el color del brillo: hay que fijarlo aquí o
-  // los glifos monocromos (⬇, ❄) se pintan casi transparentes.
-  context.fillStyle = GLYPH_INK;
+  // drawBlock deja el fillStyle en el color del brillo (o del propio bloque): hay
+  // que fijarlo aquí o los glifos monocromos (⬇, ❄) se pintan casi transparentes.
+  context.fillStyle = SKIN_GLYPH_INK[skin] ?? GLYPH_INK;
   context.font = `${Math.floor(size * 0.6)}px system-ui, -apple-system, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
@@ -388,7 +562,7 @@ function drawGlyph(context, x, y, type, size, alpha) {
 }
 
 function drawGrid() {
-  ctx.strokeStyle = GRID_COLORS[theme];
+  ctx.strokeStyle = SKIN_GRIDS[skin][theme];
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -435,7 +609,7 @@ function draw() {
 
   // marco de hielo mientras dura el congelado
   if (freezeMs > 0) {
-    ctx.strokeStyle = COLORS[FREEZE];
+    ctx.strokeStyle = colors[FREEZE];
     ctx.lineWidth = 3;
     ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
   }
@@ -469,7 +643,12 @@ function setTheme(mode) {
   document.body.classList.toggle('light-theme', mode === 'light');
   themeToggle.checked = mode === 'light';
   localStorage.setItem('tetris-theme', mode);
-  if (board) draw();
+  // la vista previa también depende del tema (brillo del bloque), así que se
+  // repinta con el tablero o se queda con los colores del tema anterior
+  if (board) {
+    draw();
+    drawNext();
+  }
 }
 
 function togglePause() {
@@ -516,6 +695,48 @@ function loop(ts) {
   }
   animId = requestAnimationFrame(loop);
 }
+
+// ---- Skins ----
+// Registro de skins: la clave es la misma en el <select>, en SKIN_PALETTES y en
+// la clase body.skin-<clave> del CSS.
+const SKIN_RENDERERS = {
+  retro: drawBlockRetro,
+  neon: drawBlockNeon,
+  pastel: drawBlockPastel,
+  pixel: drawBlockPixel,
+};
+const SKIN_NAMES = Object.keys(SKIN_RENDERERS);
+
+// Cambia de skin en caliente: nueva paleta, nuevo dibujante de bloque, clase en
+// el body para el CSS del tablero y repintado. No pasa por init(), así que la
+// partida en curso se mantiene.
+function setSkin(name) {
+  // lo que venga de localStorage no es de fiar: cualquier valor desconocido cae a retro
+  skin = SKIN_NAMES.includes(name) ? name : 'retro';
+  colors = SKIN_PALETTES[skin];
+  drawBlockSkin = SKIN_RENDERERS[skin];
+  for (const s of SKIN_NAMES) document.body.classList.toggle(`skin-${s}`, s === skin);
+  skinSelect.value = skin;
+  localStorage.setItem('tetris-skin', skin);
+  if (board) {
+    draw();
+    drawNext();
+  }
+}
+
+skinSelect.addEventListener('change', () => {
+  setSkin(skinSelect.value);
+  // devolver el foco al juego: si el <select> se lo queda, la siguiente flecha
+  // cambiaría de skin en vez de mover la pieza.
+  skinSelect.blur();
+});
+
+// Mientras el <select> tiene el foco, sus teclas son suyas: cortamos la
+// propagación para que no lleguen al keydown del documento (y al revés, el juego
+// no se mueve mientras se está eligiendo skin con el teclado).
+skinSelect.addEventListener('keydown', e => e.stopPropagation());
+
+setSkin(localStorage.getItem('tetris-skin'));
 
 function init() {
   board = createBoard();
