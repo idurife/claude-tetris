@@ -192,11 +192,21 @@ const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
 const skinSelect = document.getElementById('skin-select');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const menuRestartBtn = document.getElementById('menu-restart-btn');
+const menuControlsBtn = document.getElementById('menu-controls-btn');
+const menuControls = document.getElementById('menu-controls');
+const startLevelSelect = document.getElementById('start-level');
+// El tope de nivel inicial sale del propio selector: los <option> de
+// index.html son la fuente de verdad y así no hay dos listas que cuadrar.
+const MAX_START_LEVEL = startLevelSelect.options.length;
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let pendingPowerUp, nextPowerUpLines, freezeMs, powerLabel;
 let theme = 'dark';
 let skin = 'retro', colors = SKIN_PALETTES.retro, drawBlockSkin = drawBlockRetro;
+let startLevel = 1, baseLevel = 1;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -273,8 +283,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = baseLevel + Math.floor(lines / 10);
+    dropInterval = levelInterval(level);
     // cada POWERUP_EVERY líneas, la siguiente pieza generada es un power-up
     if (lines >= nextPowerUpLines) {
       pendingPowerUp = true;
@@ -655,6 +665,8 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    hidePauseMenu();
+    overlay.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
@@ -662,6 +674,7 @@ function togglePause() {
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
     overlay.classList.remove('hidden');
+    showPauseMenu();
   }
 }
 
@@ -738,14 +751,100 @@ skinSelect.addEventListener('keydown', e => e.stopPropagation());
 
 setSkin(localStorage.getItem('tetris-skin'));
 
+// ---- Menú de pausa ----
+// El menú vive dentro del overlay: togglePause() lo muestra al pausar y lo
+// esconde al reanudar, mientras que endGame() deja el overlay sin menú. Lo que
+// impide que las teclas muevan la pieza con el menú abierto no es nada de aquí,
+// sino el `return` por `paused` del handler de keydown del juego.
+function showPauseMenu() {
+  setMenuControls(false);
+  pauseMenu.classList.remove('hidden');
+  // el botón Reiniciar del overlay sobra mientras el menú tiene el suyo
+  restartBtn.classList.add('hidden');
+  resumeBtn.focus({ preventScroll: true });
+}
+
+function hidePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  restartBtn.classList.remove('hidden');
+  // Al volver al juego ningún control puede quedarse el foco: Space (caída
+  // rápida) y Enter activarían el botón del menú pulsado con el ratón, o el
+  // interruptor de tema del panel, en vez de jugar. Si no hay nada enfocado
+  // (arranque de la página) no se toca nada.
+  const active = document.activeElement;
+  if (active && active !== document.body && typeof active.blur === 'function') active.blur();
+}
+
+// La lista de teclas del menú es independiente de la del panel lateral: esta se
+// pliega y despliega con la opción "Ver controles".
+function setMenuControls(visible) {
+  menuControls.classList.toggle('hidden', !visible);
+  menuControlsBtn.textContent = visible ? 'Ocultar controles' : 'Ver controles';
+  menuControlsBtn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+}
+
+function toggleMenuControls() {
+  setMenuControls(menuControls.classList.contains('hidden'));
+}
+
+// El nivel inicial se guarda en localStorage, que es entrada no fiable: si lo
+// leído no es un entero entre 1 y MAX_START_LEVEL, se cae a 1. Se valida en el
+// mismo sitio que el cambio desde el selector.
+function loadStartLevel() {
+  setStartLevel(localStorage.getItem('tetris-start-level'));
+}
+
+// Cambiar el selector no altera la partida en curso: init() copia startLevel a
+// baseLevel al empezar la siguiente.
+function setStartLevel(value) {
+  const n = parseInt(value, 10);
+  startLevel = Number.isInteger(n) && n >= 1 && n <= MAX_START_LEVEL ? n : 1;
+  localStorage.setItem('tetris-start-level', String(startLevel));
+  startLevelSelect.value = String(startLevel);
+}
+
+// Velocidad de caída de un nivel: la misma fórmula al arrancar y al subir.
+function levelInterval(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
+}
+
+// Teclas del menú: las flechas recorren las opciones y Tab se queda dando
+// vueltas dentro (el menú es modal, no debe dejar el foco en los controles que
+// quedan detrás del overlay).
+function handleMenuKey(e) {
+  if (!paused || gameOver || pauseMenu.classList.contains('hidden')) return;
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    cycleFocus(Array.from(pauseMenu.querySelectorAll('button, select')), e.shiftKey ? -1 : 1);
+    return;
+  }
+  if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return;
+  // dentro del selector las flechas cambian de nivel (comportamiento nativo)
+  if (document.activeElement === startLevelSelect) return;
+  e.preventDefault();
+  // el selector se queda fuera del recorrido de las flechas: entrar en él con
+  // ellas cambiaría el nivel sin querer. Se llega con Tab o con el ratón.
+  cycleFocus(Array.from(pauseMenu.querySelectorAll('.pause-option')), e.code === 'ArrowDown' ? 1 : -1);
+}
+
+function cycleFocus(items, step) {
+  if (!items.length) return;
+  const from = items.indexOf(document.activeElement);
+  const to = from < 0 ? (step > 0 ? 0 : items.length - 1) : (from + step + items.length) % items.length;
+  items[to].focus({ preventScroll: true });
+}
+
 function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  // el nivel elegido se congela al empezar: cambiar el selector a mitad de
+  // partida no debe tocar esta
+  baseLevel = startLevel;
+  level = baseLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = levelInterval(level);
   dropAccum = 0;
   pendingPowerUp = false;
   nextPowerUpLines = POWERUP_EVERY;
@@ -756,12 +855,14 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  hidePauseMenu();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
+  // Escape pausa igual que P, salvo dentro del selector de nivel: allí cierra su lista
+  if (e.code === 'KeyP' || (e.code === 'Escape' && document.activeElement !== startLevelSelect)) { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -790,6 +891,14 @@ restartBtn.addEventListener('click', init);
 themeToggle.addEventListener('change', () => {
   setTheme(themeToggle.checked ? 'light' : 'dark');
 });
+
+// ---- Eventos del menú de pausa ----
+resumeBtn.addEventListener('click', togglePause);
+menuRestartBtn.addEventListener('click', init);
+menuControlsBtn.addEventListener('click', toggleMenuControls);
+startLevelSelect.addEventListener('change', () => setStartLevel(startLevelSelect.value));
+document.addEventListener('keydown', handleMenuKey);
+loadStartLevel();
 
 setTheme(localStorage.getItem('tetris-theme') === 'light' ? 'light' : 'dark');
 
