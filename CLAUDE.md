@@ -75,3 +75,49 @@ Pause/resume works by `cancelAnimationFrame` and then calling `loop(performance.
 `spawn()` calls `endGame()` while still inside `loop()` (via `lockPiece()`), so `endGame()`'s `cancelAnimationFrame(animId)` cannot stop the frame that is already executing — `animId` refers to it. That is why `loop()` checks `gameOver || paused` *after* `draw()` and returns instead of scheduling the next frame; without that check the loop kept running behind the overlay and pieces kept stacking. `cancelAnimationFrame` in `endGame()` still matters for the hard-drop path, where the game ends from a keydown handler and there is a genuinely pending frame.
 
 Consequences to preserve if you touch lock/spawn/loop: `spawn()` returns right after `endGame()`, `draw()` skips ghost + current piece once `gameOver` is set (the piece that did not fit is never painted over the stack), and `endGame()` repaints once so the final board is correct on both paths.
+
+### Skins (`SKIN_PALETTES`, `SKIN_RENDERERS`, `setSkin()`)
+
+A `<select id="skin-select">` in the panel swaps palette **and** block renderer at
+runtime; the choice persists in `localStorage` under `tetris-skin` and anything
+that is not one of `retro` / `neon` / `pastel` / `pixel` falls back to `retro`
+(`SKIN_NAMES.includes(...)`, so `__proto__` and friends are rejected too).
+
+- **`colors` is the active palette, `COLORS` is only the retro one.** Every draw
+  function reads `colors[...]`; `COLORS` survives as `SKIN_PALETTES.retro` and as
+  the length reference for `dye()` (`new Array(COLORS.length)`), which stays valid
+  because **every palette must have the same 15 indices: `null` at 0 and one color
+  per type through `WILD` (14)**. The color index is still the piece type, so a
+  palette with a different order silently recolors pieces and a shorter one breaks
+  `dye()`.
+- **`drawBlock()` is now just a dispatcher**: it keeps the `if (!colorIndex) return`
+  guard (call sites pass `0` cells freely) and delegates to `drawBlockSkin`, which
+  `setSkin()` points at `drawBlockRetro` / `Neon` / `Pastel` / `Pixel`. Retro is
+  byte-for-byte the old body.
+- **A renderer must restore the context** (`globalAlpha`, `shadowBlur`,
+  `shadowColor`, `lineWidth`) before returning: the grid, the ghost, `drawGlyph()`,
+  `drawWild()` and the freeze frame are painted right after and inherit whatever it
+  leaves. Neon is the one that sets `shadowBlur`/`shadowColor`, and it clears both.
+- **`drawGlyph()` still sets its own `fillStyle`**, now `SKIN_GLYPH_INK[skin]`: the
+  dark `GLYPH_INK` would be invisible over neon's dark blocks, and inheriting
+  `drawBlock`'s last `fillStyle` (a ~10% alpha highlight) was already the
+  documented trap.
+- **Skin and theme are orthogonal.** `theme` is still `'dark'`/`'light'` in
+  `tetris-theme`; per-skin colors keep both variants (`SKIN_GRIDS[skin][theme]`,
+  `PASTEL_GLOSS[theme]`, retro still uses `HIGHLIGHT_COLORS[theme]`). Neon is the
+  deliberate exception: its two grid variants are identical because
+  `body.skin-neon` forces a black board background in both themes from CSS — glow
+  only reads over black.
+- `setSkin()` repaints with `draw()` + `drawNext()` instead of going through
+  `init()`, so changing skin mid-game keeps the board; it is guarded by
+  `if (board)` because it also runs at load time, before `init()`.
+- `drawNutHole()` keeps the `rect` + `arc` + `fill('evenodd')` ring (the hole shows
+  the board background) and the hardcoded `+1,+1` offset; only its color
+  (`colors[NUT]`) and a per-skin alpha (`SKIN_NUT_ALPHA`, to tone the ring down in
+  neon) depend on the skin.
+- The `<select>` needs two guards because the game's `keydown` listener is on
+  `document` and does not `preventDefault()` the arrow keys: its own `keydown`
+  handler calls `stopPropagation()` (while the select has focus its keys are its
+  own and never reach the game), and the `change` handler calls `blur()` (after
+  picking a skin with the mouse the focus goes back to the game, so the next
+  ArrowDown soft-drops instead of advancing the select and flipping the skin).
