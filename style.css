@@ -282,3 +282,216 @@ kbd {
 #restart-btn:hover {
   background: var(--restart-hover-bg);
 }
+
+/* ---- Tabla de records ---- */
+/* Variables propias de esta pantalla. Se declaran aquí, y no en los bloques
+   :root / body.light-theme de arriba, para no tocar el resto del archivo; pero
+   siguen la misma regla: un valor por tema, nada de colores hardcodeados. */
+:root {
+  --records-bg: rgba(20, 20, 32, 0.55);
+  --records-border: #2a2a3a;
+  --records-head: #555570;
+  --records-text: #c8c8d8;
+  --records-accent: #7aa2f7;
+  --records-highlight-bg: rgba(122, 162, 247, 0.22);
+  --records-input-bg: #22223a;
+  --records-input-border: #3a3a5a;
+  --records-input-color: #e0e0e0;
+}
+
+body.light-theme {
+  --records-bg: rgba(255, 255, 255, 0.75);
+  --records-border: #c8c8d8;
+  --records-head: #70707f;
+  --records-text: #2a2a35;
+  --records-accent: #3b5bdb;
+  --records-highlight-bg: rgba(59, 91, 219, 0.16);
+  --records-input-bg: #ffffff;
+  --records-input-border: #c8c8d8;
+  --records-input-color: #2a2a35;
+}
+
+/* La pantalla de inicio tapa el tablero hasta que se pulsa Jugar. */
+#start-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  border-radius: 4px;
+  z-index: 2;
+}
+
+#start-screen.hidden,
+#name-form.hidden,
+#records-panel.hidden,
+#records-best.hidden,
+#menu-btn.hidden {
+  display: none;
+}
+
+.start-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.start-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 8px;
+  color: var(--title-color);
+}
+
+.start-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--label-color);
+}
+
+.start-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ---- Tabla ---- */
+.records-wrap {
+  width: 100%;
+  min-width: 300px;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--records-bg);
+  border: 1px solid var(--records-border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--records-text);
+}
+
+.records-table th {
+  padding: 6px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--records-head);
+  border-bottom: 1px solid var(--records-border);
+}
+
+.records-table td {
+  padding: 5px;
+  font-family: 'Courier New', Courier, monospace;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.records-table tbody tr + tr td {
+  border-top: 1px solid var(--records-border);
+}
+
+.records-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left !important;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.records-highlight td {
+  background: var(--records-highlight-bg);
+  color: var(--records-accent);
+  font-weight: 700;
+}
+
+.records-empty {
+  padding: 10px 0;
+  font-size: 12px;
+  color: var(--controls-color);
+}
+
+.records-best {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--records-head);
+}
+
+/* ---- Formulario del nombre ---- */
+#name-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.records-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--records-accent);
+}
+
+.name-row {
+  display: flex;
+  gap: 6px;
+}
+
+#name-input {
+  width: 150px;
+  padding: 7px 10px;
+  background: var(--records-input-bg);
+  border: 1px solid var(--records-input-border);
+  border-radius: 6px;
+  color: var(--records-input-color);
+  font-family: inherit;
+  font-size: 13px;
+  user-select: text;
+}
+
+/* ---- Botones ---- */
+#start-btn,
+#save-score-btn {
+  background: var(--restart-bg);
+  color: var(--restart-color);
+  border: none;
+  border-radius: 6px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#start-btn:hover,
+#save-score-btn:hover {
+  background: var(--restart-hover-bg);
+}
+
+#reset-records-btn,
+#menu-btn {
+  background: transparent;
+  color: var(--records-accent);
+  border: 1px solid var(--records-input-border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#reset-records-btn:hover,
+#menu-btn:hover {
+  background: var(--records-highlight-bg);
+}
